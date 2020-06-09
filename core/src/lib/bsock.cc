@@ -3,7 +3,7 @@
 
    Copyright (C) 2007-2011 Free Software Foundation Europe e.V.
    Copyright (C) 2011-2012 Planets Communications B.V.
-   Copyright (C) 2013-2018 Bareos GmbH & Co. KG
+   Copyright (C) 2013-2020 Bareos GmbH & Co. KG
 
    This program is Free Software; you can redistribute it and/or
    modify it under the terms of version three of the GNU Affero General Public
@@ -404,8 +404,37 @@ bool BareosSocket::TwoWayAuthenticate(JobControlRecord* jcr,
     }
 
     auth_success = cram_md5_handshake.DoHandshake(initiated_by_remote);
+
     if (!auth_success) {
-      Jmsg(jcr, M_FATAL, 0, _("Authorization key rejected %s.\n"), identity);
+      char ipaddr_str[MAXHOSTNAMELEN]{};
+      SockaddrToAscii(&(client_addr), ipaddr_str, sizeof(ipaddr_str));
+
+      switch (cram_md5_handshake.result) {
+        case CramMd5Handshake::HandshakeResult::CHALLENGE_ATTACK: {
+          const char* fmt =
+              "Warning! Attack detected: "
+              "I will not answer to my own challenge. "
+              "Please check integrity of the host at IP address: %s\n";
+          Jmsg(jcr, M_FATAL, 0, fmt, ipaddr_str);
+          Dmsg1(debuglevel, fmt, ipaddr_str);
+          break;
+        }
+        case CramMd5Handshake::HandshakeResult::NETWORK_ERROR:
+          Jmsg(jcr, M_FATAL, 0, _("Network error during CRAM MD5 with %s\n"),
+               ipaddr_str);
+          break;
+        case CramMd5Handshake::HandshakeResult::WRONG_HASH:
+          Jmsg(jcr, M_FATAL, 0, _("Authorization key rejected by %s.\n"),
+               ipaddr_str);
+          break;
+        case CramMd5Handshake::HandshakeResult::FORMAT_MISMATCH:
+          Jmsg(jcr, M_FATAL, 0,
+               _("Wrong format of the CRAM challenge with %s.\n"), ipaddr_str);
+        default:
+          break;
+      }
+      fsend(_("1999 Authorization failed.\n"));
+      Bmicrosleep(sleep_time_after_authentication_error, 0);
     } else if (jcr && JobCanceled(jcr)) {
       Dmsg0(debuglevel, "Failed, because job is canceled.\n");
       auth_success = false;
