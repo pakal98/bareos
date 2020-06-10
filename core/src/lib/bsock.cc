@@ -385,12 +385,15 @@ bool BareosSocket::TwoWayAuthenticate(JobControlRecord* jcr,
   bool auth_success = false;
 
   if (jcr && JobCanceled(jcr)) {
-    Dmsg0(debuglevel, "Failed, because job is canceled.\n");
+    const char* fmt =
+        _("TwoWayAuthenticate failed, because job was canceled.\n");
+    Jmsg(jcr, M_FATAL, 0, fmt);
+    Dmsg0(debuglevel, fmt);
   } else if (password.encoding != p_encoding_md5) {
-    Jmsg(jcr, M_FATAL, 0,
-         _("Password encoding is not MD5. You are probably restoring a NDMP "
-           "Backup "
-           "with a restore job not configured for NDMP protocol.\n"));
+    const char* fmt =
+        _("TwoWayAuthenticate failed, because password encoding is not MD5.\n");
+    Jmsg(jcr, M_FATAL, 0, fmt);
+    Dmsg0(debuglevel, fmt);
   } else {
     TlsPolicy local_tls_policy = tls_resource->GetPolicy();
     CramMd5Handshake cram_md5_handshake(this, password.value, local_tls_policy,
@@ -400,6 +403,11 @@ bool BareosSocket::TwoWayAuthenticate(JobControlRecord* jcr,
 
     if (ConnectionReceivedTerminateSignal()) {
       if (tid) { StopBsockTimer(tid); }
+      const char* fmt =
+          _("TwoWayAuthenticate failed, because connection was reset by "
+            "destination peer.\n");
+      Jmsg(jcr, M_FATAL, 0, fmt);
+      Dmsg0(debuglevel, fmt);
       return false;
     }
 
@@ -436,11 +444,17 @@ bool BareosSocket::TwoWayAuthenticate(JobControlRecord* jcr,
       fsend(_("1999 Authorization failed.\n"));
       Bmicrosleep(sleep_time_after_authentication_error, 0);
     } else if (jcr && JobCanceled(jcr)) {
-      Dmsg0(debuglevel, "Failed, because job is canceled.\n");
+      const char* fmt =
+          _("TwoWayAuthenticate failed, because job was canceled.\n");
+      Jmsg(jcr, M_FATAL, 0, fmt);
+      Dmsg0(debuglevel, fmt);
       auth_success = false;
     } else if (!DoTlsHandshake(cram_md5_handshake.RemoteTlsPolicy(),
                                tls_resource, initiated_by_remote, identity,
                                password.value, jcr)) {
+      const char* fmt = _("Tls handshake failed.\n");
+      Jmsg(jcr, M_FATAL, 0, fmt);
+      Dmsg0(debuglevel, fmt);
       auth_success = false;
     }
     if (tid) { StopBsockTimer(tid); }
