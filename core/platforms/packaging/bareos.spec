@@ -976,9 +976,9 @@ rm %{buildroot}%{_mandir}/man1/bareos-tray-monitor.*
 # install systemd service files
 %if 0%{?systemd_support}
 install -d -m 755 %{buildroot}%{_unitdir}
-install -m 644 platforms/systemd/bareos-dir.service %{buildroot}%{_unitdir}
-install -m 644 platforms/systemd/bareos-fd.service %{buildroot}%{_unitdir}
-install -m 644 platforms/systemd/bareos-sd.service %{buildroot}%{_unitdir}
+install -m 644 core/platforms/systemd/bareos-dir.service %{buildroot}%{_unitdir}
+install -m 644 core/platforms/systemd/bareos-fd.service %{buildroot}%{_unitdir}
+install -m 644 core/platforms/systemd/bareos-sd.service %{buildroot}%{_unitdir}
 %if 0%{?suse_version}
 ln -sf service %{buildroot}%{_sbindir}/rcbareos-dir
 ln -sf service %{buildroot}%{_sbindir}/rcbareos-fd
