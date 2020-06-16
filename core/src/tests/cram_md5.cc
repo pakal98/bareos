@@ -296,3 +296,26 @@ TEST(cram_md5, different_director_qualified_name)
       << "---> Inbound TestSocket Error: "
       << socket_result_to_string.at(cs.s2->result);
 }
+
+TEST(cram_md5, same_stored_qualified_name_should_pass_cram)
+{
+  CramSockets cs("R_STORAGE", "Test1", "R_STORAGE", "Test1");
+
+  EXPECT_TRUE(cs.handshake_ok_1);
+  EXPECT_EQ(cs.cram1.result, CramMd5Handshake::HandshakeResult::SUCCESS)
+      << "  CramMd5Handshake::HandshakeResult::"
+      << cram_result_to_string.at(cs.cram1.result) << std::endl
+      << "  Wich is probably a side effect of a challange attack." << std::endl;
+
+  EXPECT_TRUE(cs.handshake_ok_2);
+  EXPECT_EQ(cs.cram2.result, CramMd5Handshake::HandshakeResult::SUCCESS)
+      << "  CramMd5Handshake::HandshakeResult::"
+      << cram_result_to_string.at(cs.cram2.result) << std::endl;
+
+  EXPECT_EQ(cs.s1->result, TestSocket::Result::kSuccess)
+      << "---> Outbound TestSocket Error: "
+      << socket_result_to_string.at(cs.s1->result);
+  EXPECT_EQ(cs.s2->result, TestSocket::Result::kSuccess)
+      << "---> Inbound TestSocket Error: "
+      << socket_result_to_string.at(cs.s2->result);
+}

@@ -202,8 +202,11 @@ bool CramMd5Handshake::CramMd5Response()
   auto comparison_result = CompareChallengeWithOwnQualifiedName(chal.c_str());
 
   if (comparison_result == ComparisonResult::IS_SAME) {
-    result = HandshakeResult::CHALLENGE_ATTACK;
-    return false;
+    std::string c(chal.c_str());
+    if (c.rfind("R_STORAGE") == std::string::npos) {
+      result = HandshakeResult::CHALLENGE_ATTACK;
+      return false;
+    }
   }
 
   if (comparison_result == ComparisonResult::FAILURE) {
