@@ -1292,6 +1292,47 @@ static inline bool PerformAdoRecover(bpContext* ctx)
   return RunAdoQuery(ctx, recovery_query.c_str());
 }
 
+static bool GetVdiConfiguration(bpContext* ctx,
+                                IClientVirtualDeviceSet2* VDIDeviceSet,
+                                VDConfig* VDIConfig)
+{
+  bool success = false;
+  bool abort = false;
+  int tries = 3;
+
+  HRESULT hr = NOERROR;
+
+  while (!success && !abort && tries != 0) {
+    hr = VDIDeviceSet->GetConfiguration(VDI_DEFAULT_WAIT, VDIConfig);
+    --tries;
+
+    switch (hr) {
+      case NOERROR:
+        success = true;
+        break;
+      case VD_E_ABORT:
+        abort = true;
+        break;
+      default:
+      case VD_E_TIMEOUT:
+        break;
+    }
+  }
+
+  if (!success) {
+    char error_msg[100];
+    sprintf(error_msg,
+            "mssqlvdi-fd: IClientVirtualDeviceSet2::GetConfiguration "
+            "failed: %0#x (tried: %d times)\n",
+            static_cast<unsigned int>(hr), (3 - tries));
+
+    Jmsg(ctx, M_FATAL, error_msg);
+    Dmsg(ctx, debuglevel, error_msg);
+    return false;
+  }
+  return true;
+}
+
 /**
  * Setup a VDI device for performing a backup or restore operation.
  */
@@ -1373,16 +1414,7 @@ static inline bool SetupVdiDevice(bpContext* ctx, struct io_pkt* io)
    */
   p_ctx->AdoThreadStarted = true;
 
-  /*
-   * Wait for the database server to connect to the VDI deviceset.
-   */
-  hr = p_ctx->VDIDeviceSet->GetConfiguration(VDI_DEFAULT_WAIT,
-                                             &p_ctx->VDIConfig);
-  if (!SUCCEEDED(hr)) {
-    Jmsg(ctx, M_FATAL,
-         "mssqlvdi-fd: IClientVirtualDeviceSet2::GetConfiguration failed\n");
-    Dmsg(ctx, debuglevel,
-         "mssqlvdi-fd: IClientVirtualDeviceSet2::GetConfiguration failed\n");
+  if (!GetVdiConfiguration(ctx, p_ctx->VDIDeviceSet, &p_ctx->VDIConfig)) {
     goto bail_out;
   }
 
