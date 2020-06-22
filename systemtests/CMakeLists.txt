@@ -398,7 +398,6 @@ set(ALL_BINARIES_BEING_USED_BY_SYSTEMTESTS
     bareos-fd
     bareos-sd
     bareos-dbcopy
-    bareos_vadp_dumper
     bcopy
     btape
     bextract
