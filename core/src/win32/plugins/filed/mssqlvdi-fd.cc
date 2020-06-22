@@ -1414,8 +1414,38 @@ static inline bool SetupVdiDevice(bpContext* ctx, struct io_pkt* io)
    */
   p_ctx->AdoThreadStarted = true;
 
-  if (!GetVdiConfiguration(ctx, p_ctx->VDIDeviceSet, &p_ctx->VDIConfig)) {
-    goto bail_out;
+  {
+    hr = VDIDeviceSet->GetConfiguration(VDI_DEFAULT_WAIT, &p_ctx->VDIConfig);
+
+    conts char* err = "";
+    bool success = false;
+
+    switch (hr) {
+      case NOERROR:
+        success = true;
+        break;
+      case VD_E_ABORT:
+        err = "VD_E_ABORT";
+        break;
+      default:
+        err = "unspecific error";
+        break;
+      case VD_E_TIMEOUT:
+        err = "VD_E_ABORT";
+        break;
+    }
+
+    if (!success) {
+      char error_msg[100];
+      sprintf(error_msg,
+              "mssqlvdi-fd: IClientVirtualDeviceSet2::GetConfiguration "
+              "failed: %0#x\n",
+              static_cast<unsigned int>(hr));
+
+      Jmsg(ctx, M_FATAL, error_msg);
+      Dmsg(ctx, debuglevel, error_msg);
+      return false;
+    }
   }
 
   hr = p_ctx->VDIDeviceSet->OpenDevice(p_ctx->vdsname, &p_ctx->VDIDevice);
