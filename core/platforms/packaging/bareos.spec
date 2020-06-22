@@ -1045,8 +1045,8 @@ rm %{buildroot}%{_mandir}/man1/bareos-tray-monitor.*
 
 # remove vmware plugin files when vmware is not built
 %if  !0%{?vmware}
-rm -f %{plugin_dir}/BareosFdPluginVMware.py*
-rm -f %{plugin_dir}/bareos-fd-vmware.py*
+rm -f %{buildroot}%{plugin_dir}/BareosFdPluginVMware.py*
+rm -f %{buildroot}%{plugin_dir}/bareos-fd-vmware.py*
 %endif
 
 
