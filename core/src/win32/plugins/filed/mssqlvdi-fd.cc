@@ -73,6 +73,7 @@ static const int debuglevel = 150;
   "  stopbeforemark=<log sequence number specification>:\n" \
   "  stopatmark=<log sequence number specification>:\n"     \
   "  stopat=<timestamp>\n"                                  \
+  "  getconfigurationtimeout=<timeout>\n"                   \
   "  \n"                                                    \
   " examples:\n"                                            \
   "  timestamp: 'Apr 15, 2020 12:00 AM'\n"                  \
@@ -158,6 +159,7 @@ struct plugin_ctx {
   char* ado_connect_string;
   char* ado_query;
   char* ado_errorstr;
+  uint32_t get_configuration_timeout;
   wchar_t* vdsname;
   int32_t backup_level;
   IClientVirtualDeviceSet2* VDIDeviceSet;
@@ -189,7 +191,9 @@ enum plugin_argument_type
   argument_recover_after_restore,
   argument_stopbeforemark,
   argument_stopatmark,
-  argument_stopat
+  argument_stopat,
+  argument_getoptions,
+  argument_get_configuration_timeout
 };
 
 struct plugin_argument {
@@ -209,6 +213,7 @@ static plugin_argument plugin_arguments[] = {
     {"stopbeforemark", argument_stopbeforemark},
     {"stopatmark", argument_stopatmark},
     {"stopat", argument_stopat},
+    {"getconfigurationtimeout", argument_get_configuration_timeout},
     {NULL, argument_none}};
 
 #ifdef __cplusplus
@@ -526,6 +531,21 @@ static inline bool ParseBoolean(const char* argument_value)
 }
 
 /**
+ * Parse a uint32 value
+ */
+static inline bool ParseUnsignedInt(const char* argument_value,
+                                    uint32_t& value_out)
+{
+  try {
+    value_out = std::stoul(argument_value);
+    return true;
+  } catch (std::invalid_argument& e) {
+    return false;
+  }
+}
+
+
+/**
  * Only set destination to value when it has no previous setting.
  */
 static inline void SetStringIfNull(char** destination, char* value)
@@ -621,6 +641,7 @@ static bRC parse_plugin_definition(bpContext* ctx, void* value)
       if (Bstrcasecmp(argument, plugin_arguments[i].name)) {
         char** str_destination = NULL;
         bool* bool_destination = NULL;
+        uint32_t* uint32_destination = NULL;
 
         switch (plugin_arguments[i].type) {
           case argument_server_address:
@@ -656,6 +677,8 @@ static bRC parse_plugin_definition(bpContext* ctx, void* value)
           case argument_stopat:
             str_destination = &p_ctx->stopat;
             break;
+          case argument_get_configuration_timeout:
+            uint32_destination = &p_ctx->get_configuration_timeout;
           default:
             break;
         }
@@ -676,6 +699,13 @@ static bRC parse_plugin_definition(bpContext* ctx, void* value)
          */
         if (bool_destination) {
           *bool_destination = ParseBoolean(argument_value);
+        }
+
+        if (uint32_destination) {
+          if (!ParseUnsignedInt(argument_value, *uint32_destination)) {
+            Jmsg(ctx, M_FATAL, "Wrong value (%s) for %s in plugin definition\n",
+                 argument_value, argument);
+          }
         }
 
         /*
@@ -1292,47 +1322,6 @@ static inline bool PerformAdoRecover(bpContext* ctx)
   return RunAdoQuery(ctx, recovery_query.c_str());
 }
 
-static bool GetVdiConfiguration(bpContext* ctx,
-                                IClientVirtualDeviceSet2* VDIDeviceSet,
-                                VDConfig* VDIConfig)
-{
-  bool success = false;
-  bool abort = false;
-  int tries = 3;
-
-  HRESULT hr = NOERROR;
-
-  while (!success && !abort && tries != 0) {
-    hr = VDIDeviceSet->GetConfiguration(VDI_DEFAULT_WAIT, VDIConfig);
-    --tries;
-
-    switch (hr) {
-      case NOERROR:
-        success = true;
-        break;
-      case VD_E_ABORT:
-        abort = true;
-        break;
-      default:
-      case VD_E_TIMEOUT:
-        break;
-    }
-  }
-
-  if (!success) {
-    char error_msg[100];
-    sprintf(error_msg,
-            "mssqlvdi-fd: IClientVirtualDeviceSet2::GetConfiguration "
-            "failed: %0#x (tried: %d times)\n",
-            static_cast<unsigned int>(hr), (3 - tries));
-
-    Jmsg(ctx, M_FATAL, error_msg);
-    Dmsg(ctx, debuglevel, error_msg);
-    return false;
-  }
-  return true;
-}
-
 /**
  * Setup a VDI device for performing a backup or restore operation.
  */
@@ -1414,39 +1403,49 @@ static inline bool SetupVdiDevice(bpContext* ctx, struct io_pkt* io)
    */
   p_ctx->AdoThreadStarted = true;
 
+  // GetConfiguration
   {
-    hr = VDIDeviceSet->GetConfiguration(VDI_DEFAULT_WAIT, &p_ctx->VDIConfig);
+    uint32_t timeout = p_ctx->get_configuration_timeout == 0
+                           ? VDI_DEFAULT_WAIT
+                           : p_ctx->get_configuration_timeout;
 
-    conts char* err = "";
+    hr = p_ctx->VDIDeviceSet->GetConfiguration(&p_ctx->VDIConfig, timeout);
+
+    const char* err = "";
     bool success = false;
 
     switch (hr) {
       case NOERROR:
+        err = "NOERROR";
         success = true;
         break;
       case VD_E_ABORT:
         err = "VD_E_ABORT";
         break;
-      default:
-        err = "unspecific error";
-        break;
       case VD_E_TIMEOUT:
         err = "VD_E_ABORT";
         break;
+      default:
+        err = "unspecific error";
+        break;
     }
 
-    if (!success) {
-      char error_msg[100];
-      sprintf(error_msg,
-              "mssqlvdi-fd: IClientVirtualDeviceSet2::GetConfiguration "
-              "failed: %0#x\n",
-              static_cast<unsigned int>(hr));
+    char error_msg[160];
+    const char* fmt =
+        "mssqlvdi-fd: IClientVirtualDeviceSet2::GetConfiguration "
+        "%s: %0#x (%s)\n";
 
+    if (success) {
+      sprintf(error_msg, fmt, "successful", static_cast<unsigned int>(hr), err);
+      Jmsg(ctx, M_INFO, error_msg);
+      Dmsg(ctx, debuglevel, error_msg);
+    } else {
+      sprintf(error_msg, fmt, "failed", static_cast<unsigned int>(hr), err);
       Jmsg(ctx, M_FATAL, error_msg);
       Dmsg(ctx, debuglevel, error_msg);
-      return false;
+      goto bail_out;
     }
-  }
+  }  // GetConfiguration
 
   hr = p_ctx->VDIDeviceSet->OpenDevice(p_ctx->vdsname, &p_ctx->VDIDevice);
   if (!SUCCEEDED(hr)) {
