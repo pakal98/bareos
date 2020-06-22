@@ -51,7 +51,7 @@ The bpipe plugin is specified in the Include section of your Job’s FileSet res
          signature = MD5
          compression = gzip
        }
-       Plugin = "bpipe:file=<filepath>:reader=<readprogram>:writer=<writeprogram>
+       Plugin = "bpipe:file=<filepath>:reader=<readprogram>:writer=<writeprogram>"
      }
    }
 
