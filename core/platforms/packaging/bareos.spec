@@ -1043,10 +1043,10 @@ rm -f %{buildroot}/%{script_dir}/bareos-glusterfind-wrapper
 rm %{buildroot}%{_mandir}/man1/bareos-tray-monitor.*
 %endif
 
-# remove vmware  plugin files when vmware is not built
+# remove vmware plugin files when vmware is not built
 %if  !0%{?vmware}
-rm %{plugin_dir}/BareosFdPluginVMware.py*
-rm %{plugin_dir}/bareos-fd-vmware.py*
+rm -f %{plugin_dir}/BareosFdPluginVMware.py*
+rm -f %{plugin_dir}/bareos-fd-vmware.py*
 %endif
 
 
