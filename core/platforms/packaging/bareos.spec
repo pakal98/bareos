@@ -1043,6 +1043,15 @@ rm -f %{buildroot}/%{script_dir}/bareos-glusterfind-wrapper
 rm %{buildroot}%{_mandir}/man1/bareos-tray-monitor.*
 %endif
 
+# remove vmware  plugin files when vmware is not built
+%if  !0%{?vmware}
+rm %{plugin_dir}/BareosFdPluginVMware.py*
+rm %{plugin_dir}/bareos-fd-vmware.py*
+%endif
+
+
+
+
 # install systemd service files
 %if 0%{?systemd_support}
 install -d -m 755 %{buildroot}%{_unitdir}
@@ -1088,10 +1097,9 @@ mkdir -p %{?buildroot}/%{_libdir}/bareos/plugins/vmware_plugin
 %files -n bareos-vmware-plugin
 %defattr(-,root,root)
 %dir %{_libdir}/bareos/
-# {_libdir}/bareos/plugins/
 %{_sbindir}/vmware_cbt_tool.py
-%{plugin_dir}/bareos-fd-vmware.py
-%{plugin_dir}/BareosFdPluginVMware.py
+%{plugin_dir}/BareosFdPluginVMware.py*
+%{plugin_dir}/bareos-fd-vmware.py*
 %doc src/vmware/LICENSE src/vmware/README.md
 
 %files -n bareos-vmware-plugin-compat
